@@ -19,8 +19,11 @@ output [
   { name: "FINISH_REASON" data_type: TYPE_STRING dims: [ 1 ] }    # stop|length|content_filter
 ]
 
-# Python backends run each instance as a SEPARATE PROCESS -> GIL-free parallelism.
-# Scale this up to absorb concurrent streams (each stream holds one instance busy).
+# Each instance is a separate PROCESS. The BLS submits every stream to an in-process
+# thread pool (MAX_CONCURRENT_STREAMS), so ONE instance carries many concurrent
+# streams (they are I/O-bound on the engine). A low count is plenty:
+# 2 instances x 32 workers = 64 in-flight streams, matching the engines' build-time
+# max_batch_size=64.
 instance_group [ { count: 2 kind: KIND_CPU } ]
 
 parameters: { key: "TOKENIZER_DIR"            value: { string_value: "/hf_models/Qwen2.5-1.5B-Instruct" } }
@@ -29,5 +32,6 @@ parameters: { key: "LARGE_MODEL"              value: { string_value: "tensorrt_l
 parameters: { key: "GUARD_MODEL"              value: { string_value: "guardrail" } }
 parameters: { key: "ENABLE_GUARDRAILS"        value: { string_value: "true" } }
 parameters: { key: "OUTPUT_GUARD_WINDOW_CHARS" value: { string_value: "120" } }  # moderation window vs TTFT trade-off (E10)
+parameters: { key: "MAX_CONCURRENT_STREAMS"   value: { string_value: "32" } }     # in-process stream workers per instance (fills the engine batch)
 parameters: { key: "RESTRICT_TOPIC"           value: { string_value: "true" } }   # II.4: only answer in-scope questions
 parameters: { key: "TOPIC_DENY_MESSAGE"       value: { string_value: "I'm sorry, but I can only answer questions about NVIDIA GTC (GPU Technology Conference) - its keynotes, sessions, schedule, and announcements. Please ask me something about GTC." } }

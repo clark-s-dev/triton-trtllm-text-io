@@ -26,6 +26,7 @@ CPU-only laptop.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import sys
@@ -100,6 +101,11 @@ class TritonPythonModel:
         cfg = json.loads(args["model_config"])
         p = {k: v["string_value"] for k, v in cfg.get("parameters", {}).items()}
 
+        # We stream from many worker threads (see the pool below); disable the
+        # tokenizer's own Rust thread pool so N workers don't each fan out threads,
+        # and to silence the fork/parallelism warning.
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
         tok_dir = p.get("TOKENIZER_DIR", "/models/Qwen2.5-1.5B-Instruct")
         # The tokenizer is the server-side source of the chat template AND the
         # vocabulary the incremental detokenizer decodes against.
@@ -127,21 +133,46 @@ class TritonPythonModel:
         # it documents the intent and keeps same-prefix traffic on one engine.
         self._affinity = {}
 
+        # --- concurrency: one instance, many in-flight streams --------------
+        # A blocking execute() caps an instance at ONE concurrent stream, which
+        # starves the engine's batch. Instead submit each request to a thread pool
+        # and return immediately, so one process keeps many streams in flight and
+        # the engine batch stays full. _handle's per-request state (detok/stops/
+        # pending) is all local, so workers share no mutable state; while a worker
+        # waits on the engine's decoupled stream the GIL is free for the others
+        # (the streams are I/O-bound on the engine, not CPU-bound).
+        self.max_streams = int(p.get("MAX_CONCURRENT_STREAMS", "32"))
+        self._pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_streams, thread_name_prefix="bls-stream"
+        )
+
     def finalize(self):
+        # Let in-flight streams finish (each sends its COMPLETE_FINAL) before unload.
+        self._pool.shutdown(wait=True)
         self._affinity.clear()
 
-    # -- main entrypoint (decoupled: we stream via the response sender) -------
+    # -- main entrypoint (decoupled + non-blocking) ---------------------------
     def execute(self, requests):
+        # Hand each request to the pool and return NOW, so this instance carries
+        # many concurrent streams instead of blocking on one at a time.
         for request in requests:
             sender = request.get_response_sender()
+            self._pool.submit(self._handle_safe, request, sender)
+        return None  # decoupled models return None
+
+    def _handle_safe(self, request, sender):
+        # Runs in a pool thread. The stream MUST always be finalized or the client
+        # hangs, so any error becomes a final error response.
+        try:
+            self._handle(request, sender)
+        except Exception as exc:  # never leave a stream un-finalized
             try:
-                self._handle(request, sender)
-            except Exception as exc:  # never leave a stream un-finalized
                 resp = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(f"text_pipeline_bls: {exc}")
                 )
                 sender.send(resp, flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
-        return None  # decoupled models return None
+            except Exception:
+                pass  # sender already closed (partial stream) — nothing more to do
 
     # -- the pipeline --------------------------------------------------------
     def _handle(self, request, sender):
