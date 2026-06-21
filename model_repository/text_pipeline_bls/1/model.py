@@ -113,6 +113,15 @@ class TritonPythonModel:
         self.enable_guard = p.get("ENABLE_GUARDRAILS", "true").lower() == "true"
         self.guard_model = p.get("GUARD_MODEL", "guardrail")
 
+        # II.4 scope gate: only answer in-scope questions (e.g. NVIDIA GTC); return a
+        # static denial for everything else. The off-topic decision is the guard
+        # model's zero-shot classifier (MODE="topic").
+        self.restrict_topic = p.get("RESTRICT_TOPIC", "false").lower() == "true"
+        self.topic_deny_message = p.get(
+            "TOPIC_DENY_MESSAGE",
+            "I'm sorry, but I can only answer questions about NVIDIA GTC.",
+        )
+
         # II.2 prefix-affinity bookkeeping: hash(shared prefix) -> last engine.
         # In a multi-instance deploy this would be a shared/consistent map; here
         # it documents the intent and keeps same-prefix traffic on one engine.
@@ -148,6 +157,16 @@ class TritonPythonModel:
             verdict = self._guard(_last_user_text(messages), mode="input")
             if verdict["blocked"]:
                 self._send(sender, f"[blocked: {verdict['category']}]",
+                           finish="content_filter", final=True)
+                return
+
+        # (2b) SCOPE GUARD — only answer in-scope questions; otherwise return a static
+        #      denial *before* the LLM. Off-topic detection is the guard model's
+        #      zero-shot classifier (MODE="topic"); fail-open so a classifier hiccup
+        #      does not deny a legitimate question.
+        if self.restrict_topic:
+            if self._guard(_last_user_text(messages), mode="topic")["blocked"]:
+                self._send(sender, self.topic_deny_message,
                            finish="content_filter", final=True)
                 return
 

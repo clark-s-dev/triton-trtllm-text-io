@@ -1,7 +1,8 @@
 # triton-trtllm-text-io — Architecture & Status Report
 
 *Local bring-up on a single NVIDIA L4 (NGC `tritonserver:24.10-trtllm`, TensorRT-LLM 0.14.0).*
-*Companion docs: root-cause analysis of every fix in [`RCA.md`](./RCA.md);*
+*Companion docs: implementation walkthrough in [`IMPLEMENTATION.md`](./IMPLEMENTATION.md);*
+*root-cause analysis of every fix in [`RCA.md`](./RCA.md);*
 *guardrail test report with real captured outputs in [`GUARDRAILS.md`](./GUARDRAILS.md).*
 
 ---

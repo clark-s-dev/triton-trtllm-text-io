@@ -29,3 +29,5 @@ parameters: { key: "LARGE_MODEL"              value: { string_value: "tensorrt_l
 parameters: { key: "GUARD_MODEL"              value: { string_value: "guardrail" } }
 parameters: { key: "ENABLE_GUARDRAILS"        value: { string_value: "true" } }
 parameters: { key: "OUTPUT_GUARD_WINDOW_CHARS" value: { string_value: "120" } }  # moderation window vs TTFT trade-off (E10)
+parameters: { key: "RESTRICT_TOPIC"           value: { string_value: "true" } }   # II.4: only answer in-scope questions
+parameters: { key: "TOPIC_DENY_MESSAGE"       value: { string_value: "I'm sorry, but I can only answer questions about NVIDIA GTC (GPU Technology Conference) - its keynotes, sessions, schedule, and announcements. Please ask me something about GTC." } }
