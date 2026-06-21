@@ -2,6 +2,7 @@
 hf_models/
 engines/
 ckpt/
+ckpt-*/
 TensorRT-LLM/
 results/
 model.cache
