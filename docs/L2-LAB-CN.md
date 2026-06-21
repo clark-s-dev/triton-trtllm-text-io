@@ -1,6 +1,8 @@
 # L2 推理引擎实验台 — Ablate-on-your-own-rig
 
-> **这份文档是「怎么做」的执行手册;方向/路线在 [`AI-INFRA-DIRECTION.md`](./AI-INFRA-DIRECTION.md)。**
+> 🌐 **English version:** [`L2-LAB-EN.md`](./L2-LAB-EN.md)
+
+> **这份文档是「怎么做」的执行手册;方向/路线在 [`AI-INFRA-DIRECTION.md`](./AI-INFRA-DIRECTION-CN.md)。**
 > 那篇说「往引擎层下沉、vLLM 学原理、TRT-LLM/Dynamo 主场深耕」;**这篇把它变成一台你现在就能跑的消融实验台。**
 >
 > **结论先行:** 你手上是一台「**每个 L2 旋钮都已拧到 ON、且大半个旋钮改 `config.pbtxt` + `docker restart` 就能拧 OFF**」的实验台。
@@ -54,7 +56,7 @@
 
 ## 3. ★ 核心产物:消融矩阵
 
-每一行 = 一个 L2 子系统。**先填「预测」列(写下数字 + 机理),再去填实测。** 模板见 [`lab-notebook/TEMPLATE.md`](./lab-notebook/TEMPLATE.md)。
+每一行 = 一个 L2 子系统。**先填「预测」列(写下数字 + 机理),再去填实测。** 模板见 [`lab-notebook/TEMPLATE.md`](./lab-notebook/TEMPLATE-CN.md)。
 
 | 旋钮(现值) | 关/改成 | R/B | 先预测(数字 + 机理) | 测什么 | 读 vLLM 哪里 |
 |---|---|---|---|---|---|
@@ -81,7 +83,7 @@
 
 ## 5. 里程碑(重写版:每个挂一个消融 + 一个产物)
 
-### M0 · 原理地基 —— **已用你的真实数字闭环(见 [`lab-notebook/0001-m0-kv-memory.md`](./lab-notebook/0001-m0-kv-memory.md))**
+### M0 · 原理地基 —— **已用你的真实数字闭环(见 [`lab-notebook/0001-m0-kv-memory.md`](./lab-notebook/0001-m0-kv-memory-CN.md))**
 
 KV/token 公式:`2 (K+V) × num_layers × num_kv_heads × head_dim × dtype_bytes`(Qwen2.5 是 **GQA**,`num_kv_heads=2` ≪ attention heads)。
 

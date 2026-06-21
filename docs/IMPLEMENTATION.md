@@ -5,7 +5,7 @@ A code-level walkthrough of `triton-trtllm-text-io`, for someone who wants to un
 to "client receives streamed text," and at each stop explain **what** the feature does,
 **where** it lives, the **key code**, and **why** it's built that way.
 
-> Companion docs: [`REPORT.md`](./REPORT.md) (architecture + status), [`RCA.md`](./RCA.md)
+> Companion docs: [`REPORT.md`](./REPORT.md) (architecture + status), [`RCA.md`](./RCA-EN.md)
 > (every bring-up bug, bilingual), [`GUARDRAILS.md`](./GUARDRAILS.md) (guardrail test report).
 
 ## The request, end to end
@@ -504,6 +504,6 @@ that the server runs the identical code.
 ## Where to look next
 
 - **Run it / operate it:** [`README.md`](../README.md), [`REPORT.md`](./REPORT.md) §4.
-- **Every bug we hit and why (EN/中文):** [`RCA.md`](./RCA.md).
+- **Every bug we hit and why (EN/中文):** [`RCA.md`](./RCA-EN.md).
 - **Guardrail behavior, measured:** [`GUARDRAILS.md`](./GUARDRAILS.md).
 - **Tune it:** the `config.pbtxt` knobs table in [`README.md`](../README.md).

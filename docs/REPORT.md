@@ -2,7 +2,7 @@
 
 *Local bring-up on a single NVIDIA L4 (NGC `tritonserver:24.10-trtllm`, TensorRT-LLM 0.14.0).*
 *Companion docs: implementation walkthrough in [`IMPLEMENTATION.md`](./IMPLEMENTATION.md);*
-*root-cause analysis of every fix in [`RCA.md`](./RCA.md);*
+*root-cause analysis of every fix in [`RCA.md`](./RCA-EN.md);*
 *guardrail test report with real captured outputs in [`GUARDRAILS.md`](./GUARDRAILS.md).*
 
 ---
@@ -134,7 +134,7 @@ make obs-down                             # stop the observability stack
 
 ## 5. Known limitations & next steps
 
-**Resolved since the initial bring-up** (full bilingual RCA in [`RCA.md`](./RCA.md) §9–§10):
+**Resolved since the initial bring-up** (full bilingual RCA in [`RCA.md`](./RCA-EN.md) §9–§10):
 - **`finish_reason`** now distinguishes a natural EOS stop (`stop`) from budget exhaustion
   (`length`) and stop-strings (`stop`) — the decision is a GPU-free, unit-tested pure function in
   `src/text_io/finish.py`, so live behavior == tested behavior.

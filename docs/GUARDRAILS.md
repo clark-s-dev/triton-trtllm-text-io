@@ -3,7 +3,7 @@
 
 *Run on a single NVIDIA L4, NGC `tritonserver:24.10-trtllm` (TensorRT-LLM 0.14.0), 2026-06-21.*
 *Companion: architecture in [`REPORT.md`](./REPORT.md), code walkthrough in
-[`IMPLEMENTATION.md`](./IMPLEMENTATION.md), root-cause analysis in [`RCA.md`](./RCA.md).*
+[`IMPLEMENTATION.md`](./IMPLEMENTATION.md), root-cause analysis in [`RCA.md`](./RCA-EN.md).*
 
 **EN:** Real, captured outputs from the `guardrail` classifier and the `text_pipeline_bls`
 gateway. Every value below is measured on the live server — nothing is hand-written. Reproduce
