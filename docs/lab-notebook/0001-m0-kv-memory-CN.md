@@ -1,6 +1,8 @@
 # 0001 · M0 — KV-cache 显存手算 vs 引擎实际分配
 
-> 实验台用法见 [`../L2-LAB.md`](../L2-LAB.md)。这条是 M0 的闭环,也是 [`TEMPLATE.md`](./TEMPLATE.md) 的一个填好的范例。
+> 🌐 **English version:** [`0001-m0-kv-memory-EN.md`](./0001-m0-kv-memory-EN.md)
+
+> 实验台用法见 [`../L2-LAB.md`](../L2-LAB-CN.md)。这条是 M0 的闭环,也是 [`TEMPLATE.md`](./TEMPLATE-CN.md) 的一个填好的范例。
 
 | 字段 | 内容 |
 |---|---|

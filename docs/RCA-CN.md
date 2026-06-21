@@ -1,6 +1,8 @@
 # Root Cause Analysis — Local L4 bring-up (engine build, serving, observability)
 # 根因分析 —— 本地 L4 端到端启动（引擎构建、推理服务、可观测性）
 
+> 🌐 **English version:** [`RCA-EN.md`](./RCA-EN.md)
+
 This document records every issue hit while bringing `triton-trtllm-text-io` up
 end-to-end on a single **NVIDIA L4** with the **NGC `tritonserver:24.10-trtllm-python-py3`**
 image (which bundles **TensorRT-LLM 0.14.0**), and how each was fixed. Each entry has
