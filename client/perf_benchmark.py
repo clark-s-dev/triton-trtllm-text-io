@@ -115,6 +115,9 @@ def main():
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--num-requests", type=int, default=64)
     ap.add_argument("--input-len", type=int, default=128)
+    ap.add_argument("--input-len-max", type=int, default=0,
+                    help="if > input-len, each request draws a random input length in [input-len, input-len-max] "
+                         "(a mix of long prefills + short decodes exposes chunked context)")
     ap.add_argument("--output-len", type=int, default=128)
     ap.add_argument("--output-len-max", type=int, default=0,
                     help="if > output-len, each request draws a random length in [output-len, output-len-max] "
@@ -135,7 +138,9 @@ def main():
                 i = tasks.get_nowait()
             except queue.Empty:
                 return
-            ids = make_input_ids(args.input_len, args.shared_prefix_len, rng)
+            imax = args.input_len_max or args.input_len
+            ilen = int(rng.integers(args.input_len, imax + 1)) if imax > args.input_len else args.input_len
+            ids = make_input_ids(ilen, args.shared_prefix_len, rng)
             omax = args.output_len_max or args.output_len
             olen = int(rng.integers(args.output_len, omax + 1)) if omax > args.output_len else args.output_len
             text = f"In about {olen} tokens, give me detailed facts about NVIDIA GTC topic #{i}."
@@ -157,7 +162,8 @@ def main():
     s = {
         "label": args.label, "target": args.target, "model": args.model,
         "concurrency": args.concurrency, "num_requests": args.num_requests,
-        "input_len": args.input_len, "output_len": args.output_len,
+        "input_len": args.input_len, "input_len_max": args.input_len_max or args.input_len,
+        "output_len": args.output_len,
         "output_len_max": args.output_len_max or args.output_len,
         "shared_prefix_len": args.shared_prefix_len,
         "completed": len(ok), "errors": len(errs), "wall_s": round(wall, 3),
