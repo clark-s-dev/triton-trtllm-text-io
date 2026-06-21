@@ -14,9 +14,9 @@ connectors:
     histogram:
       explicit:
         buckets: [2ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2s, 5s]
-    dimensions:
-      - name: service.name
-      - name: span.name
+    # NOTE: service.name / span.name / span.kind / status.code are IMPLICIT
+    # dimensions in the spanmetrics connector — re-declaring them fails config
+    # validation ("duplicate dimension name"). Add only extra dimensions here.
 
 exporters:
   otlp/jaeger:

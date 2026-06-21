@@ -4,6 +4,7 @@ engines/
 ckpt/
 TensorRT-LLM/
 results/
+model.cache
 
 # Python
 __pycache__/

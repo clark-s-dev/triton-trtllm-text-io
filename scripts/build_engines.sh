@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TRITON_TAG=${TRITON_TAG:-24.10-trtllm-python-py3}
-TRTLLM_REF=${TRTLLM_REF:-v0.13.0}          # match the TensorRT-LLM in the image
+TRTLLM_REF=${TRTLLM_REF:-v0.14.0}          # match the TensorRT-LLM in the image (24.10 ships TRT-LLM 0.14.0)
 IMAGE="nvcr.io/nvidia/tritonserver:${TRITON_TAG}"
 
 # Examples (convert_checkpoint.py) ship in the TensorRT-LLM repo, not the image.
@@ -20,10 +20,18 @@ fi
 
 docker run --rm --gpus all -v "$PWD:/work" -w /work "$IMAGE" bash -lc '
   set -euo pipefail
+  # Work around an NGC 24.10 tensorrt_llm 0.14.0 bug: qwen/model.py calls
+  # loader.check_share_embedding() but the installed method requires (config).
+  # That helper is what remaps the tied lm_head -> vocab embedding, so the
+  # convert needs it called correctly.
+  QWEN_MODEL=/usr/local/lib/python3.10/dist-packages/tensorrt_llm/models/qwen/model.py
+  sed -i "s/loader.check_share_embedding()/loader.check_share_embedding(config)/g" "$QWEN_MODEL"
   EX=TensorRT-LLM/examples/qwen
   build() {  # <tag> <hf_dir>
+    # Qwen2.5-0.5B/1.5B tie word embeddings (no separate lm_head.weight), so the
+    # converter needs --use_embedding_sharing or it crashes loading a None lm_head.
     python3 "$EX/convert_checkpoint.py" --model_dir "hf_models/$2" \
-        --output_dir "ckpt/$1" --dtype float16
+        --output_dir "ckpt/$1" --dtype float16 --use_embedding_sharing
     trtllm-build --checkpoint_dir "ckpt/$1" --output_dir "engines/qwen2.5-$1-fp16" \
         --gemm_plugin float16 --max_batch_size 64 \
         --use_paged_context_fmha enable --paged_kv_cache enable \

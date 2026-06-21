@@ -102,6 +102,8 @@ class TritonPythonModel:
         # The tokenizer is the server-side source of the chat template AND the
         # vocabulary the incremental detokenizer decodes against.
         self.tokenizer = AutoTokenizer.from_pretrained(tok_dir)
+        # Stop at end-of-turn; without end_id the engine runs to max_tokens every time.
+        self.end_id = self.tokenizer.eos_token_id
 
         self.small_model = p.get("SMALL_MODEL", "tensorrt_llm_small")
         self.large_model = p.get("LARGE_MODEL", "tensorrt_llm_large")
@@ -249,23 +251,26 @@ class TritonPythonModel:
             pb_utils.Tensor("runtime_top_p", np.array([[top_p]], dtype=np.float32)),
             pb_utils.Tensor("streaming", np.array([[True]], dtype=bool)),
         ]
+        if self.end_id is not None:
+            inputs.append(pb_utils.Tensor("end_id", np.array([[self.end_id]], dtype=np.int32)))
         req = pb_utils.InferenceRequest(
             model_name=model_name,
             requested_output_names=["output_ids", "sequence_length"],
             inputs=inputs,
         )
-        # exec(decoupled=True) yields one response per decode step.
-        emitted = 0
+        # The TRT-LLM backend (24.10) streams the NEW token(s) per decoupled
+        # response, not the full running sequence — so each response IS the delta.
+        # Yield it directly. (A cumulative seq[emitted:] counter here drops every
+        # token after the first, since each response's length is just the delta.)
         for resp in req.exec(decoupled=True):
             if resp.has_error():
                 raise RuntimeError(resp.error().message())
-            seq = pb_utils.get_output_tensor_by_name(resp, "output_ids").as_numpy().reshape(-1)
-            # Some backend versions stream the full running sequence, others just
-            # the new token(s). Track how many we've seen and yield only the new.
-            new = seq[emitted:]
-            emitted = seq.shape[0]
-            if new.size:
-                yield new.astype(np.int64).tolist()
+            out = pb_utils.get_output_tensor_by_name(resp, "output_ids")
+            if out is None:
+                continue
+            seq = out.as_numpy().reshape(-1)
+            if seq.size:
+                yield seq.astype(np.int64).tolist()
 
     # -- streamed response out ----------------------------------------------
     def _send(self, sender, text, finish=None, final=False):
