@@ -8,6 +8,9 @@ COPY requirements-server.txt /tmp/requirements-server.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-server.txt
 
 # Single source of truth for the streaming pre/post math, importable by the BLS.
+# Baked in so the image is self-contained; start_server.sh ALSO bind-mounts the
+# host src/ over this path, so edits to text_io go live on `docker restart`
+# (same edit-and-restart workflow as model_repository) without an image rebuild.
 COPY src /workspace/src
 ENV TEXT_IO_SRC=/workspace/src
 
