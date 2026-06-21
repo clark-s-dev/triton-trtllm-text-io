@@ -39,14 +39,17 @@ def make_input_ids(input_len, shared_len, rng):
     return np.array(shared + tail, dtype=np.int32)
 
 
-def engine_inputs(input_ids, output_len):
+def engine_inputs(input_ids, output_len, beam_width=1):
     L = int(input_ids.size)
-    return [
+    ins = [
         _inp("input_ids", input_ids.reshape(1, L), "INT32"),
         _inp("input_lengths", np.array([[L]], dtype=np.int32), "INT32"),
         _inp("request_output_len", np.array([[output_len]], dtype=np.int32), "INT32"),
         _inp("streaming", np.array([[True]], dtype=bool), "BOOL"),
     ]
+    if beam_width > 1:
+        ins.append(_inp("beam_width", np.array([[beam_width]], dtype=np.int32), "INT32"))
+    return ins
 
 
 def bls_inputs(text, output_len):
@@ -57,13 +60,13 @@ def bls_inputs(text, output_len):
     ]
 
 
-def run_one(host, target, model, input_ids, output_len, text):
+def run_one(host, target, model, input_ids, output_len, text, beam_width=1):
     """One streaming request; returns (ttft_s, e2e_s, n_out_tokens, [itl_s...], err)."""
     cli = grpcclient.InferenceServerClient(url=host)
     q: "queue.Queue" = queue.Queue()
     cli.start_stream(callback=lambda result, error: q.put((result, error)))
     if target == "engine":
-        inputs, outs, name = engine_inputs(input_ids, output_len), ["output_ids", "sequence_length"], model
+        inputs, outs, name = engine_inputs(input_ids, output_len, beam_width), ["output_ids", "sequence_length"], model
     else:
         inputs, outs, name = bls_inputs(text, output_len), ["TEXT", "FINISH_REASON"], "text_pipeline_bls"
     req_outs = [grpcclient.InferRequestedOutput(n) for n in outs]
@@ -81,7 +84,7 @@ def run_one(host, target, model, input_ids, output_len, text):
                 n = int(o.reshape(-1).size) if o is not None else 0
                 if n:
                     stamps.append(now); ntok += n
-                if ntok >= output_len:
+                if len(stamps) >= output_len:   # count decode STEPS (beam-agnostic), not tokens
                     break
             else:
                 tx = r.as_numpy("TEXT")
@@ -123,6 +126,7 @@ def main():
                     help="if > output-len, each request draws a random length in [output-len, output-len-max] "
                          "(varied lengths expose continuous vs static batching)")
     ap.add_argument("--shared-prefix-len", type=int, default=0)
+    ap.add_argument("--beam-width", type=int, default=1, help="engine beam search width (engine must be built with --max_beam_width >= this)")
     ap.add_argument("--label", default="")
     args = ap.parse_args()
 
@@ -144,7 +148,7 @@ def main():
             omax = args.output_len_max or args.output_len
             olen = int(rng.integers(args.output_len, omax + 1)) if omax > args.output_len else args.output_len
             text = f"In about {olen} tokens, give me detailed facts about NVIDIA GTC topic #{i}."
-            res = run_one(args.host, args.target, args.model, ids, olen, text)
+            res = run_one(args.host, args.target, args.model, ids, olen, text, args.beam_width)
             with lock:
                 results.append(res)
 
