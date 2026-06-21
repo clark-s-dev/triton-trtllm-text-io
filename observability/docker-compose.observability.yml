@@ -1,0 +1,58 @@
+# Standard observability stack for triton-trtllm-text-io.
+#
+# Triton already exposes Prometheus metrics on :8002 and can export OTLP traces;
+# this stack scrapes/collects/visualizes them. Run it on the L4 box ALONGSIDE the
+# Triton container. Prometheus reaches Triton via host.docker.internal:8002
+# (works on Docker Desktop and, via the extra_hosts mapping, on Linux).
+#
+#   docker compose -f docker-compose.observability.yml up -d
+#   Grafana    http://localhost:3000   (anonymous admin)
+#   Prometheus http://localhost:9090
+#   Jaeger     http://localhost:16686
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.9-3.6.1-ubuntu22.04
+    runtime: nvidia
+    cap_add: ["SYS_ADMIN"]
+    environment:
+      - DCGM_EXPORTER_LISTEN=:9400
+    ports: ["9400:9400"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    ports: ["4317:4317", "4318:4318", "8889:8889"]
+    depends_on: ["jaeger"]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports: ["16686:16686"]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports: ["3000:3000"]
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_USERS_DEFAULT_THEME=light
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: ["prometheus"]

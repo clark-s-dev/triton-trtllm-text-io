@@ -1,0 +1,4 @@
+# Host / client side (laptop or the L4 box, outside the container).
+tritonclient[grpc]>=2.41
+numpy>=1.24
+huggingface_hub[cli]>=0.25

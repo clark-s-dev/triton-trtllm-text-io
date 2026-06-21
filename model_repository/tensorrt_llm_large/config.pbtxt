@@ -1,0 +1,21 @@
+# Large routing target — e.g. Qwen2.5-1.5B-Instruct, FP16.
+# TRIMMED to the Part II-relevant knobs. For a real deploy, start from the
+# tensorrtllm_backend `tensorrt_llm/config.pbtxt` template for your pinned TRT-LLM
+# version (it declares the full input/output tensor set the BLS calls: input_ids,
+# input_lengths, request_output_len, streaming, temperature, runtime_top_p, end_id,
+# pad_id -> output_ids, sequence_length) and merge the parameters below.
+name: "tensorrt_llm_large"
+backend: "tensorrtllm"
+max_batch_size: 64
+model_transaction_policy { decoupled: true }     # stream output_ids per decode step
+dynamic_batching { }
+
+parameters: { key: "gpt_model_type"  value: { string_value: "inflight_fused_batching" } }
+parameters: { key: "gpt_model_path"  value: { string_value: "/engines/qwen2.5-1.5b-fp16" } }
+
+# --- II.2 KV-cache reuse (prefix caching) ----------------------------------
+parameters: { key: "enable_kv_cache_reuse"          value: { string_value: "true" } }
+parameters: { key: "kv_cache_free_gpu_mem_fraction" value: { string_value: "0.45" } }  # share 24GB L4 with the small engine + guard
+parameters: { key: "batch_scheduler_policy"         value: { string_value: "max_utilization" } }
+parameters: { key: "exclude_input_in_output"        value: { string_value: "true" } }
+parameters: { key: "enable_chunked_context"         value: { string_value: "true" } }

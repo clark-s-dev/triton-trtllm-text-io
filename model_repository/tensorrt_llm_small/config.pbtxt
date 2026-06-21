@@ -1,0 +1,17 @@
+# Small routing target — e.g. Qwen2.5-0.5B-Instruct, FP16. The cheap engine the
+# router sends easy/short requests to (II.3). Same Qwen2.5 tokenizer as the large
+# model, so the BLS uses one tokenizer for both.
+name: "tensorrt_llm_small"
+backend: "tensorrtllm"
+max_batch_size: 64
+model_transaction_policy { decoupled: true }
+dynamic_batching { }
+
+parameters: { key: "gpt_model_type"  value: { string_value: "inflight_fused_batching" } }
+parameters: { key: "gpt_model_path"  value: { string_value: "/engines/qwen2.5-0.5b-fp16" } }
+
+parameters: { key: "enable_kv_cache_reuse"          value: { string_value: "true" } }
+parameters: { key: "kv_cache_free_gpu_mem_fraction" value: { string_value: "0.25" } }
+parameters: { key: "batch_scheduler_policy"         value: { string_value: "max_utilization" } }
+parameters: { key: "exclude_input_in_output"        value: { string_value: "true" } }
+parameters: { key: "enable_chunked_context"         value: { string_value: "true" } }

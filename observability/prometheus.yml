@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # Triton's native metrics endpoint (HTTP 8002). Exposes per-model inference
+  # counts/latencies, queue depth, and TRT-LLM KV-cache block metrics.
+  - job_name: "triton"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8002"]
+        labels:
+          service: "triton-trtllm-text-io"
+
+  # NVIDIA DCGM exporter — GPU utilization / memory / POWER (for tokens/s/W on L4).
+  - job_name: "dcgm"
+    static_configs:
+      - targets: ["dcgm-exporter:9400"]
+
+  # RED metrics derived from OTel spans (per-pipeline-stage latency) by the
+  # collector's spanmetrics connector.
+  - job_name: "otel-spanmetrics"
+    static_configs:
+      - targets: ["otel-collector:8889"]

@@ -1,0 +1,13 @@
+# Large / generated artifacts — never commit these
+hf_models/
+engines/
+ckpt/
+TensorRT-LLM/
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
