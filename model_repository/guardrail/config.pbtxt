@@ -21,3 +21,13 @@ parameters: { key: "INPUT_MODEL"  value: { string_value: "protectai/deberta-v3-b
 parameters: { key: "OUTPUT_MODEL" value: { string_value: "unitary/toxic-bert" } }
 parameters: { key: "BLOCK_THRESHOLD" value: { string_value: "0.5" } }
 parameters: { key: "DEVICE" value: { string_value: "cuda" } }
+
+# Topic / scope gate (MODE="topic"): zero-shot NLI relevance. BLOCKED when the
+# in-scope label's score < TOPIC_THRESHOLD. Runs on CPU by default (no VRAM
+# contention with the engines). Swap TOPIC_MODEL / edit TOPIC_LABELS to retarget.
+parameters: { key: "ENABLE_TOPIC"     value: { string_value: "true" } }
+parameters: { key: "TOPIC_MODEL"      value: { string_value: "facebook/bart-large-mnli" } }
+parameters: { key: "TOPIC_DEVICE"     value: { string_value: "cpu" } }
+parameters: { key: "TOPIC_LABELS"     value: { string_value: "NVIDIA GTC (GPU Technology Conference)|an unrelated topic" } }
+parameters: { key: "TOPIC_HYPOTHESIS" value: { string_value: "This text is about {}." } }
+parameters: { key: "TOPIC_THRESHOLD"  value: { string_value: "0.5" } }

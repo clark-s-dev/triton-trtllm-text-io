@@ -10,6 +10,9 @@ endpoint users actually expect.
 > (Part I = the streaming text-I/O core; **Part II** = the production features this repo adds).
 > LLM sibling of the CV project `triton-fused-prepost-backend` (image→boxes): same
 > "fuse pre/post into the server" thesis, on the hardest axis — streaming text on TRT-LLM.
+>
+> **New to the code?** [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) is a feature-by-feature
+> walkthrough of how each piece is built (with code + the "why").
 
 ---
 

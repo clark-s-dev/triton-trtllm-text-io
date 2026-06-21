@@ -53,6 +53,23 @@ class TritonPythonModel:
             "toxic,severe_toxic,obscene,threat,insult,identity_hate",
         ).split(","))
 
+        # Topic / scope gate (zero-shot NLI). Only loaded when enabled — it is a
+        # bigger model — and on CPU by default so it does not compete with the
+        # engines for VRAM. MODE="topic" -> BLOCKED when the text is off-topic.
+        self.enable_topic = p.get("ENABLE_TOPIC", "false").lower() == "true"
+        self.topic_clf = None
+        if self.enable_topic:
+            topic_model = p.get("TOPIC_MODEL", "facebook/bart-large-mnli")
+            topic_device = 0 if p.get("TOPIC_DEVICE", "cpu") == "cuda" else -1
+            self.topic_labels = [s for s in p.get(
+                "TOPIC_LABELS", "NVIDIA GTC (GPU Technology Conference)|an unrelated topic"
+            ).split("|") if s]
+            self.topic_label = self.topic_labels[0]          # the in-scope label
+            self.topic_hypothesis = p.get("TOPIC_HYPOTHESIS", "This text is about {}.")
+            self.topic_threshold = float(p.get("TOPIC_THRESHOLD", "0.5"))
+            self.topic_clf = pipeline("zero-shot-classification",
+                                      model=topic_model, device=topic_device)
+
     def execute(self, requests):
         responses = []
         for request in requests:
@@ -68,6 +85,15 @@ class TritonPythonModel:
     def _classify(self, text, mode):
         if not text.strip():
             return False, "", 0.0
+        if mode == "topic":
+            if not self.topic_clf:                        # feature off -> allow (fail-open)
+                return False, "", 0.0
+            res = self.topic_clf(text, self.topic_labels,
+                                 hypothesis_template=self.topic_hypothesis, multi_label=False)
+            scores = dict(zip(res["labels"], res["scores"]))
+            on_topic = float(scores.get(self.topic_label, 0.0))
+            blocked = on_topic < self.topic_threshold     # below the relevance bar -> off-topic
+            return blocked, ("OFF_TOPIC" if blocked else ""), on_topic
         if mode == "input":
             top = self.input_clf(text)[0]
             label, score = top["label"], float(top["score"])
