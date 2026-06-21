@@ -1,0 +1,31 @@
+# The production gateway. Decoupled (streaming) Python/BLS model that orchestrates
+# routing -> input guard -> tokenize -> TRT-LLM engine -> incremental detok+stop
+# -> chunked output guard. Clients call THIS model and receive streamed TEXT deltas.
+name: "text_pipeline_bls"
+backend: "python"
+max_batch_size: 0                          # BLS handles one request; engine batches internally
+model_transaction_policy { decoupled: true }   # required for token streaming
+
+input [
+  { name: "MESSAGES"    data_type: TYPE_STRING dims: [ 1 ] },                 # JSON chat array
+  { name: "MAX_TOKENS"  data_type: TYPE_INT32  dims: [ 1 ] optional: true },
+  { name: "TEMPERATURE" data_type: TYPE_FP32   dims: [ 1 ] optional: true },
+  { name: "TOP_P"       data_type: TYPE_FP32   dims: [ 1 ] optional: true },
+  { name: "STOP"        data_type: TYPE_STRING dims: [ -1 ] optional: true }, # stop strings
+  { name: "MODEL"       data_type: TYPE_STRING dims: [ 1 ] optional: true }   # explicit route
+]
+output [
+  { name: "TEXT"          data_type: TYPE_STRING dims: [ 1 ] },   # streamed text delta
+  { name: "FINISH_REASON" data_type: TYPE_STRING dims: [ 1 ] }    # stop|length|content_filter
+]
+
+# Python backends run each instance as a SEPARATE PROCESS -> GIL-free parallelism.
+# Scale this up to absorb concurrent streams (each stream holds one instance busy).
+instance_group [ { count: 2 kind: KIND_CPU } ]
+
+parameters: { key: "TOKENIZER_DIR"            value: { string_value: "/hf_models/Qwen2.5-1.5B-Instruct" } }
+parameters: { key: "SMALL_MODEL"              value: { string_value: "tensorrt_llm_small" } }
+parameters: { key: "LARGE_MODEL"              value: { string_value: "tensorrt_llm_large" } }
+parameters: { key: "GUARD_MODEL"              value: { string_value: "guardrail" } }
+parameters: { key: "ENABLE_GUARDRAILS"        value: { string_value: "true" } }
+parameters: { key: "OUTPUT_GUARD_WINDOW_CHARS" value: { string_value: "120" } }  # moderation window vs TTFT trade-off (E10)

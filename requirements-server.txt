@@ -1,0 +1,7 @@
+# Installed INTO the Triton image (Dockerfile) for the Python backends.
+# torch + tensorrt_llm come from the NGC base image.
+transformers>=4.45
+tokenizers>=0.20
+sentencepiece>=0.2
+accelerate>=0.34
+protobuf

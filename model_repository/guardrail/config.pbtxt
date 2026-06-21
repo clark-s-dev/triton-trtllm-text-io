@@ -1,0 +1,23 @@
+# Co-located safety classifier. Called synchronously by text_pipeline_bls before
+# the LLM (MODE="input") and on output chunks (MODE="output").
+name: "guardrail"
+backend: "python"
+max_batch_size: 0            # called per-chunk by the BLS; scale with instance_group
+
+input [
+  { name: "TEXT" data_type: TYPE_STRING dims: [ 1 ] },
+  { name: "MODE" data_type: TYPE_STRING dims: [ 1 ] }   # "input" | "output"
+]
+output [
+  { name: "BLOCKED"  data_type: TYPE_BOOL   dims: [ 1 ] },
+  { name: "CATEGORY" data_type: TYPE_STRING dims: [ 1 ] },
+  { name: "SCORE"    data_type: TYPE_FP32   dims: [ 1 ] }
+]
+
+# Small classifier on the GPU; bump count to cut guard latency on busy streams.
+instance_group [ { count: 1 kind: KIND_GPU } ]
+
+parameters: { key: "INPUT_MODEL"  value: { string_value: "protectai/deberta-v3-base-prompt-injection-v2" } }
+parameters: { key: "OUTPUT_MODEL" value: { string_value: "unitary/toxic-bert" } }
+parameters: { key: "BLOCK_THRESHOLD" value: { string_value: "0.5" } }
+parameters: { key: "DEVICE" value: { string_value: "cuda" } }
