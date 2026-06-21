@@ -7,6 +7,7 @@ byte-exact streaming detok) runnable anywhere.
 """
 
 from .detokenize_incremental import IncrementalDetokenizer
+from .finish import classify_finish_reason
 from .stop import StopSequenceMatcher
 
-__all__ = ["IncrementalDetokenizer", "StopSequenceMatcher"]
+__all__ = ["IncrementalDetokenizer", "StopSequenceMatcher", "classify_finish_reason"]

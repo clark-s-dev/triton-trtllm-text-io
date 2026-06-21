@@ -159,10 +159,11 @@ image (which bundles **TensorRT-LLM 0.14.0**), and how each was fixed. Each entr
 - 中文：`_stream_engine` 未传入 `end_id`，引擎没有可据以停止的轮次结束 token。
 
 **Fix / 解决方案**
-- EN: Pass `end_id = tokenizer.eos_token_id` as an engine input. (Cosmetic note: the BLS still
-  reports `finish_reason: length` on an EOS stop — generation is correct; only the label is imprecise.)
-- 中文：将 `end_id = tokenizer.eos_token_id` 作为引擎输入传入。（小注：EOS 停止时 BLS 仍报
-  `finish_reason: length`——生成行为正确，只是标签不够精确。）
+- EN: Pass `end_id = tokenizer.eos_token_id` as an engine input. (At this point the BLS still
+  mislabeled an EOS stop as `finish_reason: length` — generation was correct, only the label;
+  that labeling is fixed in §9 below.)
+- 中文：将 `end_id = tokenizer.eos_token_id` 作为引擎输入传入。（此时 BLS 仍会把 EOS 停止误标为
+  `finish_reason: length`——生成行为正确，只是标签不对；该标签问题已在下文第 9 节修复。）
 
 ---
 
@@ -212,6 +213,80 @@ image (which bundles **TensorRT-LLM 0.14.0**), and how each was fixed. Each entr
   After this, traces flow Triton → collector → Jaeger and all Prometheus targets are `up`.
 - 中文：删除显式的 `dimensions` 块（使用隐式维度；仅在需要额外维度时添加）。修复后链路
   Triton → collector → Jaeger 正常，所有 Prometheus 目标均为 `up`。
+
+---
+
+## 9. Serving: finish_reason mislabeled "length" on a natural (EOS) stop
+## 9. 推理：自然结束（EOS）时 finish_reason 被误标为 “length”
+
+**Symptom / 现象**
+- EN: A short answer the model finished on its own — e.g. "The capital of France is Paris." in
+  ~8 tokens against a 256-token budget — still returned `finish_reason: length`. The generation
+  was correct; only the reported reason was wrong.
+- 中文：模型自行写完的短答案——例如用约 8 个 token 在 256 预算下回答“法国的首都是巴黎。”——
+  仍返回 `finish_reason: length`。生成本身正确，只是上报的结束原因错误。
+
+**Root cause / 根因**
+- EN: In `text_pipeline_bls`, `finish` was initialized to `"length"` and only ever flipped to
+  `"stop"` when a client STOP string matched. Nothing detected an end-of-turn (EOS) stop, so every
+  EOS-terminated generation fell through to the `"length"` default. (Follow-up to §6: §6 made the
+  engine stop at EOS via `end_id`; the BLS still mislabeled the reason.)
+- 中文：在 `text_pipeline_bls` 中，`finish` 初始化为 `"length"`，仅当客户端 STOP 字符串命中时才
+  改为 `"stop"`。没有任何逻辑识别轮次结束（EOS）停止，因此所有以 EOS 结束的生成都落到 `"length"`
+  默认值。（第 6 节的后续：第 6 节用 `end_id` 让引擎在 EOS 停止，但 BLS 仍误标结束原因。）
+
+**Fix / 解决方案**
+- EN: Count the tokens the engine emits and classify the reason explicitly — a STOP-string match or
+  an early halt (`generated < max_tokens`, i.e. EOS) → `"stop"`; only exhausting the budget →
+  `"length"`, matching OpenAI semantics. The decision is a pure function `classify_finish_reason()`
+  extracted to `src/text_io/finish.py` (the single source of truth), imported by the BLS and covered
+  by a GPU-free unit test (`tests/test_finish.py`, wired into `make test`). Verified live on the L4:
+  EOS→`stop`, tiny-budget→`length`, stop-string→`stop`, CJK+emoji→`stop`.
+- 中文：统计引擎产出的 token 数并显式判定结束原因——命中 STOP 字符串或提前停止
+  （`generated < max_tokens`，即 EOS）→ `"stop"`；仅当跑满预算 → `"length"`，与 OpenAI 语义一致。
+  该判定被抽取为纯函数 `classify_finish_reason()`，置于 `src/text_io/finish.py`（单一事实源），
+  由 BLS 导入并有免 GPU 单元测试覆盖（`tests/test_finish.py`，已接入 `make test`）。已在 L4 上实测：
+  EOS→`stop`、极小预算→`length`、停止串→`stop`、中文+emoji→`stop`。
+
+---
+
+## 10. Serving/DevX: edits to the `src/` "single source of truth" silently don't take effect
+## 10. 服务/开发体验：对 `src/`「单一事实源」的修改静默不生效
+
+**Symptom / 现象**
+- EN: After adding `src/text_io/finish.py` and importing it from the BLS, `docker restart triton-llm`
+  came up with `text_pipeline_bls` **UNAVAILABLE** — `ImportError: No module named 'text_io.finish'` —
+  and Triton's exit-on-error then made the whole container **Exit(1)**. The other three models
+  (guardrail, both engines) loaded fine, which is what made it confusing.
+- 中文：在新增 `src/text_io/finish.py` 并从 BLS 导入后，`docker restart triton-llm` 启动时
+  `text_pipeline_bls` 处于 **UNAVAILABLE**——`ImportError: No module named 'text_io.finish'`——
+  随后 Triton 的 exit-on-error 使整个容器 **Exit(1)**。其余三个模型（guardrail、两个引擎）均正常
+  加载，正是这点让问题容易误判。
+
+**Root cause / 根因**
+- EN: `src/` was **only** baked into the image (`Dockerfile: COPY src /workspace/src`), while
+  `model_repository/` was bind-mounted. So editing the BLS `model.py` took effect on restart
+  (it lives under the mount), but a **new file** under `src/text_io/` stayed invisible until an
+  image rebuild. The project documents an "edit and `docker restart`" workflow and calls
+  `src/text_io` the single source of truth — yet that workflow silently did not apply to `src/`.
+  The existing `detokenize_incremental`/`stop` imported only because they were present at the last
+  image build.
+- 中文：`src/` **仅**被烤进镜像（`Dockerfile：COPY src /workspace/src`），而 `model_repository/`
+  是 bind 挂载。因此修改 BLS 的 `model.py` 重启即生效（位于挂载目录），但 `src/text_io/` 下的
+  **新文件**在重建镜像前不可见。项目宣称的工作流是“编辑后 `docker restart`”，并称 `src/text_io`
+  为单一事实源——但该工作流对 `src/` 实际并不生效。现有的 `detokenize_incremental`/`stop` 能导入，
+  仅因为它们在上次构建镜像时已存在。
+
+**Fix / 解决方案**
+- EN: Bind-mount the host `src/` over `/workspace/src` in `start_server.sh`
+  (`-v "$PWD/src:/workspace/src"`), so the single source of truth is live-on-restart exactly like
+  `model_repository`. The `Dockerfile` still `COPY`s `src/` so the image stays self-contained for a
+  fresh clone (the runtime mount shadows the baked copy). Rebuilt the image and recreated the
+  `triton-llm` container with the mount; all four models then **READY**.
+- 中文：在 `start_server.sh` 中将主机 `src/` bind 挂载到 `/workspace/src`
+  （`-v "$PWD/src:/workspace/src"`），使单一事实源像 `model_repository` 一样重启即生效。
+  `Dockerfile` 仍 `COPY` `src/`，以便全新克隆时镜像自包含（运行时挂载会覆盖烤入的副本）。
+  重建镜像并带挂载重建 `triton-llm` 容器，之后四个模型全部 **READY**。
 
 ---
 

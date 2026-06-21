@@ -43,11 +43,13 @@ if _SRC not in sys.path:
 
 try:
     from text_io.detokenize_incremental import IncrementalDetokenizer
+    from text_io.finish import classify_finish_reason
     from text_io.stop import StopSequenceMatcher
 except Exception as exc:  # pragma: no cover - surfaced at load time on the server
     raise ImportError(
         f"Could not import text_io from {_SRC}. Scaffold Part I's src/text_io "
-        f"(detokenize_incremental.py, stop.py) or set TEXT_IO_SRC. Original: {exc}"
+        f"(detokenize_incremental.py, finish.py, stop.py) or set TEXT_IO_SRC. "
+        f"Original: {exc}"
     )
 
 from transformers import AutoTokenizer
@@ -164,12 +166,14 @@ class TritonPythonModel:
         # (4)+(5)+(6) stream from the engine, detok incrementally, moderate, emit.
         detok = IncrementalDetokenizer(self.tokenizer)
         stops = StopSequenceMatcher(stop_strings)
-        pending = ""          # buffer awaiting an output-guard decision
-        finish = "length"     # default if we hit max_tokens
+        pending = ""              # buffer awaiting an output-guard decision
+        generated = 0             # tokens emitted by the engine (vs. max_tokens)
+        stop_string_hit = False   # a client STOP sequence matched in the text
 
         for step_ids in self._stream_engine(
             target, input_ids, max_tokens, temperature, top_p
         ):
+            generated += len(step_ids)                # count before any continue
             delta = detok.add(step_ids)               # UTF-8 / SentencePiece safe
             if not delta:
                 continue
@@ -181,12 +185,18 @@ class TritonPythonModel:
                     return                            # blocked + redacted -> done
                 pending = ""
             if stop_hit:
-                finish = "stop"
+                stop_string_hit = True
                 break
 
         # drain held-back buffers at end of stream (incomplete bytes / partial stop)
         pending += detok.flush()
         pending += stops.flush()
+
+        # Why generation ended (OpenAI-style finish_reason). Single source of truth
+        # in text_io.finish, so this matches the GPU-free unit tests exactly.
+        finish = classify_finish_reason(
+            stop_string_hit=stop_string_hit, generated=generated, max_tokens=max_tokens
+        )
 
         # final flush + completion
         if pending and self.enable_guard and self._guard(pending, "output")["blocked"]:

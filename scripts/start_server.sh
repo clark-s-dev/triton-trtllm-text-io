@@ -14,6 +14,7 @@ docker build -t "$IMAGE" --build-arg TRITON_TAG="$TRITON_TAG" .
 echo "==> launching Triton (Ctrl-C to stop)"
 docker run --rm --gpus all --network host \
   -v "$PWD/model_repository:/models" \
+  -v "$PWD/src:/workspace/src" \
   -v "$PWD/engines:/engines" \
   -v "$PWD/hf_models:/hf_models" \
   "$IMAGE" \

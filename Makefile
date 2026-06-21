@@ -5,8 +5,8 @@ help:  ## show targets
 check:  ## L4 readiness gate (run first)
 	python3 scripts/check_env.py
 
-test:  ## run the GPU-free unit tests (streaming detok + stop)
-	python3 tests/test_detokenize_incremental.py && python3 tests/test_stop.py
+test:  ## run the GPU-free unit tests (streaming detok + stop + finish_reason)
+	python3 tests/test_detokenize_incremental.py && python3 tests/test_stop.py && python3 tests/test_finish.py
 
 setup:  ## install host deps + download Qwen2.5 models
 	bash scripts/setup.sh
