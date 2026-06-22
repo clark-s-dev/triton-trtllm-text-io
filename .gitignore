@@ -11,5 +11,6 @@ model.cache
 __pycache__/
 *.py[cod]
 .venv/
+.venv-vllm/
 venv/
 .pytest_cache/
