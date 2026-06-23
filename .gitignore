@@ -7,6 +7,10 @@ TensorRT-LLM/
 results/
 model.cache
 
+# Nsight profiler binaries (regenerable via scripts/profile_decode.sh); keep the *.kern.txt summaries
+lab/ncu/*.nsys-rep
+lab/ncu/*.sqlite
+
 # Python
 __pycache__/
 *.py[cod]

@@ -54,3 +54,25 @@ T(B) = T_WEIGHT + B · T_TOKEN          # ms;  T_WEIGHT=6.1, T_TOKEN=0.071
 per-token compute) are back-solved from the measured `B=16 → 2202 tok/s` and
 `B=64 → 6086 tok/s`. Prefill cost `T_PREFILL_TOKEN=0.0065` is anchored to the `C=1,
 in=128, TTFT=7 ms` point in notebook 0003. Change the engine and you re-fit two numbers.
+
+---
+
+## M4 measurement harnesses — **need the GPU** (not the GPU-free toys above)
+
+These two run *inside* the NGC trtllm container (they import `tensorrt_llm`), so they are
+launched via `docker run` (see the `Makefile`), unlike the stdlib-only toys.
+
+| File | Notebook | What it measures |
+|---|---|---|
+| [`specdec_bench.py`](./specdec_bench.py) + [`run_0016_sweep.sh`](./run_0016_sweep.sh) | [**0016**](../docs/lab-notebook/0016-speculative-decoding.md) | Draft-Target speculative decoding: per-step **acceptance rate**, mean accepted/iter, throughput, and **speedup** vs a plain-FP16 target baseline. Sweeps `draft_len K`, logits-vs-token acceptance, easy-vs-hard prompts, and the **batch crossover** (where spec-decode stops beating continuous batching). |
+| [`decode_probe.py`](./decode_probe.py) | [**0017**](../docs/lab-notebook/0017-nsight-decode-bandwidth.md) | A minimal batch=1 decode workload to put under `ncu` (`scripts/profile_decode.sh`): kernel-level **Speed-of-Light** (Memory% ≫ Compute%) proving decode is DRAM-bandwidth-bound, across FP16/FP8/INT4. |
+
+```bash
+make specdec-engines     # build draft(0.5B) + target(1.5B) engines  (scripts/build_specdec_engines.sh)
+make specdec             # run the 0016 sweep -> lab/results_0016.jsonl
+make profile-decode      # run the 0017 Nsight decode-kernel profiling -> lab/ncu/*.csv
+```
+
+The spec-decode loop is faithful to TensorRT-LLM v0.14 `examples/run.py:run_draft_target_model()`
+but cleanly instrumented; the baseline runs on the **plain** `qwen2.5-1.5b-fp16` engine because a
+`draft_tokens_external` target emits only one token per call without drafts.
