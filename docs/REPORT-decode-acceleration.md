@@ -53,6 +53,25 @@ rather than argued.
 for quality). Its kernel takes the *exact same time* in the FP16, FP8, and INT4 engines — a fixed
 bandwidth floor. That single fact explains why quantization gives sub-linear speedups (next section).
 
+**Cross-dtype comparison** (the same decode step, re-compiled in each precision):
+
+| precision | dominant linear kernel | GEMM time-share | `lm_head` (FP16) share | decode ITL | achieved BW | % peak BW | % peak compute |
+|---|---|---|---|---|---|---|---|
+| FP16 | `cudaCoreGemm` | 60.5% | 23.6% | 4.94 ms | 200 GB/s | **67%** | 0.17% |
+| FP8 (W8A8) | `sm89_xmma_gemm_e4m3` | 50.3% | 29.9% | 3.96 ms | 159 GB/s | **53%** | 0.21% |
+| INT4-AWQ (W4A16) | `weight_only` GEMV | 34.4% | 40.0% | 3.04 ms | 148 GB/s | **49%** | 0.27% |
+
+Reading across: quantization swaps in a smaller-byte GEMM kernel (`cudaCoreGemm` → FP8 `sm89_xmma` → INT4
+`weight_only`) whose share *shrinks* (60.5% → 34.4%), while the un-quantized FP16 `lm_head` share *grows*
+(23.6% → 40.0%) — the fixed floor. Every row keeps **bandwidth ≫ compute**: still bandwidth-bound.
+
+![Nsight decode-kernel analysis — bandwidth-bound, and the lm_head floor](./decode-roofline.png)
+
+*Left: decode weight kernels run at 49–67% of peak memory bandwidth but only ~0.2% of peak compute —
+bandwidth-bound. Right: as quantization shrinks the transformer GEMM, the un-quantized FP16 `lm_head`
+grows from 24% to 40% of decode time — why quantization speedup is sub-linear. (Source: `nsys` kernel
+timing + weight-byte accounting; `ncu` hardware counters are blocked on this box — see §7.)*
+
 ---
 
 ## 3. Lever 1 — Quantization: read fewer bytes (notebooks 0009 / 0011)
