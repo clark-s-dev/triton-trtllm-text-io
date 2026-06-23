@@ -113,6 +113,33 @@ mixed-load burst:
 
 Live UIs: Grafana http://localhost:3000 · Prometheus http://localhost:9090 · Jaeger http://localhost:16686
 
+### 3.5 L2 inference-engine lab (M0–M4) — decode-acceleration results
+
+Beyond bring-up, this box doubles as an **ablate-on-your-own-rig** inference lab (manual:
+[`L2-LAB.md`](./L2-LAB.md); per-experiment predict-then-measure notebooks: [`lab-notebook/`](./lab-notebook/)).
+Milestones M0–M4 are closed with real numbers measured on this L4:
+
+| Milestone | Result (measured here) | Notebooks |
+|---|---|---|
+| M0 · KV / roofline | hand-calc KV B/token matches the engine to 3 sig-figs; decode is bandwidth-bound | 0001 |
+| M1 · vLLM vs TRT-LLM | C=1 tie at 197 tok/s; C=64 TRT-LLM **+31%** throughput, lower TTFT | 0015 |
+| M2 · continuous batching | toy sim reproduces the `max_batch_size` throughput knee | 0003/0008/0013 |
+| M3 · paged KV | toy allocator reproduces engine `reused=2418` to the block | 0004/0014 |
+| **M4 · quant + spec decode** | FP8/INT4 decode speedup; **speculative decoding best K=2 (1.18× mixed, 1.50× predictable, lossless), inverts under batching**; **kernel-level proof decode is bandwidth-bound** | 0009/0011/0016/0017 |
+
+**M4 headline — three ways past the one decode "bandwidth wall"** (full write-up:
+[`REPORT-decode-acceleration.md`](./REPORT-decode-acceleration.md)). Decode at batch=1 is memory-bound —
+now **measured with Nsight Compute: the dominant `lm_head` GEMV runs at 96.6% of peak DRAM bandwidth with
+the math units ~65% idle.** Quantization cuts weight bytes (FP8/INT4, lossy); speculative decoding produces
+more tokens per weight-read (lossless single-stream latency win, dies under batching); continuous batching
+shares one weight-read across requests. The un-quantized FP16 `lm_head` is a fixed bandwidth floor that
+caps quantization's gains.
+
+> **Tooling RCA (Nsight Compute):** the `ncu`/`nsys` 2024.2.1 in the 24.10 image is too old for this box's
+> CUDA-13 / 580 driver, **and** the DCGM exporter holds the profiling counters. Both are automated by
+> [`scripts/profile_decode.sh`](../scripts/profile_decode.sh) (fetch `ncu` 2025.3.1 → stop DCGM → profile →
+> restart). Details in [notebook 0017](./lab-notebook/0017-nsight-decode-bandwidth.md) §5.
+
 ---
 
 ## 4. How to operate
