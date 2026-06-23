@@ -18,3 +18,4 @@ __pycache__/
 .venv-vllm/
 venv/
 .pytest_cache/
+lab/ncu/sol_*.log
