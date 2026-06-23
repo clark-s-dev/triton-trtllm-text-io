@@ -13,7 +13,8 @@
 
 Token generation ("decode") on a small model is **limited by memory bandwidth, not compute**. To make
 one token, the GPU reads *every weight* out of memory and does almost no arithmetic with it. On the L4,
-the decode kernels run at **~83% of peak memory bandwidth but only ~0.2% of peak compute** (§2).
+the dominant decode kernel runs at a **measured 97% of peak memory bandwidth while the math units sit ~65%
+idle** (Nsight Compute; §2).
 
 Three different techniques speed decode up, and all three are just different ways to deal with that one
 wall:
@@ -35,42 +36,47 @@ weight matrix. That's ~1 FLOP per weight byte read — the *arithmetic intensity
 "roofline ridge" (where compute and bandwidth balance) is ~400 FLOP/byte. We're **400× into the
 memory-bound regime**.
 
-**The measurement.** Nsight Compute can't run here (the CUDA-13 driver is newer than the profiler in the
-24.10 image — see §6), so we used `nsys` kernel timing + exact weight-byte counts. For the 0.5B engine at
-batch=1:
+**The measurement.** I got Nsight Compute running after two fixes (§6): upgrading to **ncu 2025.3.1** (the
+24.10 image's 2024.2.1 is too old for the CUDA-13 driver) and briefly freeing the GPU profiling counters
+from DCGM. Measured Speed-of-Light, 0.5B at batch=1:
 
-| Decode kernel | Bytes read / call | Achieved bandwidth | % of L4 peak (300 GB/s) |
+| Decode kernel | DRAM throughput (Memory) | SM throughput (Compute) | bandwidth |
 |---|---|---|---|
-| `lm_head` GEMV (FP16) | 272 MB | 246 GB/s | **82%** |
-| transformer GEMMs (FP16, per token) | 716 MB | 253 GB/s | **84%** |
-| *whole token (incl. attention/norms)* | 988 MB | 200 GB/s | 67% |
+| **`lm_head` GEMV** (FP16; identical in all 3 engines) | **96.6% of peak** | 35% | 289 GB/s |
+| FP16 transformer `cudaCoreGemm` | **80.6%** | 10% | 244 GB/s |
+| INT4 transformer `weight_only` GEMV | 42.3% | 12% | 158 GB/s |
+| FP8 transformer `sm89_xmma` GEMM | 29.0% | 5% | 83 GB/s |
 
-Compute utilization over the same kernels: **~0.2% of peak**. The kernels are *saturating memory
-bandwidth and leaving the math units idle* — that is the definition of bandwidth-bound, now measured
-rather than argued.
+The dominant kernel — the `lm_head` GEMV, far longer-running than any other — sits at **96.6% of peak
+memory bandwidth with the math units ~65% idle**. That *is* bandwidth-bound, at the hardware-counter
+level. (My first-pass byte-accounting fallback estimated 82% for it — same conclusion, slightly
+conservative; §6.)
 
-**One surprise that matters:** the final `lm_head` projection is **left in FP16** (the quantizer skips it
-for quality). Its kernel takes the *exact same time* in the FP16, FP8, and INT4 engines — a fixed
-bandwidth floor. That single fact explains why quantization gives sub-linear speedups (next section).
+**Two surprises that matter:**
+1. The final `lm_head` projection is **left in FP16** (the quantizer skips it for quality). Its kernel is
+   *byte-for-byte identical* across the FP16/FP8/INT4 engines — a fixed bandwidth floor.
+2. The *quantized* transformer GEMMs get so small at batch=1 (FP8 29%, INT4 42% DRAM) that they no longer
+   saturate bandwidth — they go **latency-bound**. You can't out-quantize the floor.
 
-**Cross-dtype comparison** (the same decode step, re-compiled in each precision):
+Together these explain why quantization gives sub-linear decode speedups (next section).
 
-| precision | dominant linear kernel | GEMM time-share | `lm_head` (FP16) share | decode ITL | achieved BW | % peak BW | % peak compute |
-|---|---|---|---|---|---|---|---|
-| FP16 | `cudaCoreGemm` | 60.5% | 23.6% | 4.94 ms | 200 GB/s | **67%** | 0.17% |
-| FP8 (W8A8) | `sm89_xmma_gemm_e4m3` | 50.3% | 29.9% | 3.96 ms | 159 GB/s | **53%** | 0.21% |
-| INT4-AWQ (W4A16) | `weight_only` GEMV | 34.4% | 40.0% | 3.04 ms | 148 GB/s | **49%** | 0.27% |
+**Cross-dtype comparison** (same decode step in each precision; nsys time-share + measured SoL):
 
-Reading across: quantization swaps in a smaller-byte GEMM kernel (`cudaCoreGemm` → FP8 `sm89_xmma` → INT4
-`weight_only`) whose share *shrinks* (60.5% → 34.4%), while the un-quantized FP16 `lm_head` share *grows*
-(23.6% → 40.0%) — the fixed floor. Every row keeps **bandwidth ≫ compute**: still bandwidth-bound.
+| precision | dominant transformer kernel | its DRAM% (measured) | `lm_head` time-share | decode ITL |
+|---|---|---|---|---|
+| FP16 | `cudaCoreGemm` | 80.6% (bandwidth-bound) | 23.6% | 4.94 ms |
+| FP8 (W8A8) | `sm89_xmma_gemm_e4m3` | 29.0% (latency-bound) | 29.9% | 3.96 ms |
+| INT4-AWQ (W4A16) | `weight_only` GEMV | 42.3% (latency-bound) | 40.0% | 3.04 ms |
+
+Reading across: quantization swaps in a smaller GEMM kernel while the un-quantized FP16 `lm_head` grows
+from **24% → 40%** of decode time — the floor that caps the speedup.
 
 ![Nsight decode-kernel analysis — bandwidth-bound, and the lm_head floor](./decode-roofline.png)
 
-*Left: decode weight kernels run at 49–67% of peak memory bandwidth but only ~0.2% of peak compute —
-bandwidth-bound. Right: as quantization shrinks the transformer GEMM, the un-quantized FP16 `lm_head`
-grows from 24% to 40% of decode time — why quantization speedup is sub-linear. (Source: `nsys` kernel
-timing + weight-byte accounting; `ncu` hardware counters are blocked on this box — see §7.)*
+*Left (measured ncu Speed-of-Light): the dominant `lm_head` GEMV runs at 97% of peak DRAM bandwidth vs 35%
+compute — bandwidth-bound; the quantized transformer GEMMs are smaller and partly latency-bound. Right:
+as quantization shrinks the transformer GEMM, the un-quantized FP16 `lm_head` grows from 24% to 40% of
+decode time — why quantization speedup is sub-linear. (ncu 2025.3.1 SoL + nsys kernel time-share; see §6.)*
 
 ---
 
@@ -173,8 +179,8 @@ single-stream latency for free but evaporates under load. They are not interchan
 make specdec-engines      # build draft(0.5B) + target(1.5B) engines  (scripts/build_specdec_engines.sh)
 make specdec              # run the full sweep -> lab/results_0016.jsonl  (lab/run_0016_sweep.sh)
 
-# Kernel-level bandwidth proof (notebook 0017):
-make profile-decode       # nsys decode-kernel timing across FP16/FP8/INT4 -> lab/ncu/*.kern.txt
+# Kernel-level bandwidth proof (notebook 0017): fetches ncu 2025.3.1, stops DCGM, runs + restarts it
+make profile-decode       # ncu Speed-of-Light (DRAM% vs SM%) FP16/FP8/INT4 -> lab/ncu/sol_*.csv + sol_summary.md
 
 # The speedup model, calibrated to the sweep, runs GPU-free in the test suite:
 make test                 # includes tests/test_specdec_model.py  (28 GPU-free tests)
@@ -190,10 +196,16 @@ serving stack and these lab engines are decoupled.
 
 - **Quantization quality is unmeasured.** This is a *performance* rig (random/synthetic decode); FP8/INT4
   accuracy must be checked on a real perplexity/task eval before production. INT4 carries more risk.
-- **Nsight Compute is blocked on this box.** The L4's CUDA-13 / 580.x driver is newer than the
-  `ncu`/`nsys` 2024.2.1 shipped in the NGC 24.10 image, so the hardware performance counters
-  (`NVPA_STATUS_ERROR`) won't initialize — `--privileged` and `--clock-control none` don't help; it needs
-  Nsight 2025.x. We got equivalent (per-kernel) evidence from `nsys` kernel timing + byte accounting.
+- **Nsight Compute needed two fixes to run here (now resolved).** Out of the box `ncu`/`nsys` 2024.2.1
+  (NGC 24.10) is too old for the CUDA-13 / 580.x driver, so the counters wouldn't init
+  (`NVPA_STATUS_ERROR` / "Unknown Error"). Fix: (1) download **ncu 2025.3.1** from NVIDIA's public CUDA
+  repo and `dpkg-deb -x` it (no root — `sudo`/`apt` are gated), run it inside the NGC container; (2) the
+  upgraded ncu then revealed the *real* second cause — the **DCGM exporter holds the profiling counters**
+  (single-owner) — so stop it for the run, restart after. `scripts/profile_decode.sh` automates both.
+  *Caveat:* under ncu kernel-replay, TRT-LLM's inflight-batch manager can trip ("Unable to get batch
+  slot"), so a run may capture only the dominant kernels (which is what we needed). The earlier `nsys` +
+  byte-accounting estimate (lm_head 82%) was confirmed by the real measurement (96.6%) — conservative but
+  correct in direction and magnitude.
 - **The speculative-decoding numbers include orchestration overhead.** The measured per-draft-step cost
   (≈0.42× a target step, vs ~0.32× from pure weight ratio) includes Python loop / sync / logit-transfer
   cost; a production C++ orchestrator would be tighter and could shift the optimal K slightly higher.
