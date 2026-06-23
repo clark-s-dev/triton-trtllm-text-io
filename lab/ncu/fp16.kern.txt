@@ -1,0 +1,35 @@
+NOTICE: Existing SQLite export found: lab/ncu/trace_fp16.sqlite
+        It is assumed file was previously exported from: lab/ncu/trace_fp16.nsys-rep
+        Consider using --force-export=true if needed.
+ ** CUDA GPU Kernel Summary (cuda_gpu_kern_sum):
++----------+-----------------+-----------+-----------+-----------+----------+----------+-------------+------------------------------------------------------------------------------------------------------+
+| Time (%) | Total Time (ns) | Instances | Avg (ns)  | Med (ns)  | Min (ns) | Max (ns) | StdDev (ns) |                                                 Name                                                 |
++----------+-----------------+-----------+-----------+-----------+----------+----------+-------------+------------------------------------------------------------------------------------------------------+
+|     60.5 |       181425819 |      5952 |   30481.5 |   22751.5 |     7839 |    79680 |     24564.1 | void tensorrt_llm::kernels::cuda_core_gemm::cudaCoreGemm<__half, __half, (int)1, (int)2, (int)128>(… |
+|     23.6 |        70690818 |        64 | 1104544.0 | 1104551.5 |  1100855 |  1107959 |      1293.6 | std::enable_if<!T7, void>::type internal::gemvx::kernel<int, int, __half, __half, __half, float, (b… |
+|      3.7 |        10956731 |      1488 |    7363.4 |    7359.0 |     7008 |     8192 |       172.0 | void tensorrt_llm::kernels::mmha::masked_multihead_attention_kernel<unsigned short, unsigned short,… |
+|      3.1 |         9226898 |      3008 |    3067.5 |    3072.0 |     2497 |     3360 |        55.3 | __myl_AddCasMulMeaAddSqrDivMulCasMul_0xa44aeaead239fb15baf12f229275313f_vec                          |
+|      2.5 |         7406784 |        64 |  115731.0 |  116671.0 |    56832 |   117055 |      7482.2 | void tensorrt_llm::kernels::batchApplyPenalty<float>(const T1 *const *, T1 *, const T1 *, int *, co… |
+|      2.1 |         6345159 |       192 |   33047.7 |   27024.0 |     8672 |   100767 |     26271.6 | void cutlass::Kernel2<cutlass_80_wmma_tensorop_f16_s161616gemm_f16_16x16_128x2_tn_align8>(T1::Param… |
+|      1.7 |         5157080 |        64 |   80579.4 |   80575.5 |    79999 |    81152 |       263.6 | void tensorrt_llm::kernels::addBiasSoftMax<float>(T1 *, T1 **, T1 *, const T1 *, const int *, const… |
+|      0.9 |         2680685 |      1536 |    1745.2 |    1759.0 |     1664 |     2656 |        28.8 | __myl_CasCasMulTanMulAddMulMulCas_0x7c1022de4c17cf7cfa9743427305505f_vec                             |
+|      0.7 |         2215439 |      1536 |    1442.3 |    1440.0 |     1375 |     1664 |        31.3 | __myl_CasCasAddCas_0xbe74be832a08b7e8e12da963af8d465a_vec                                            |
+|      0.6 |         1791343 |        64 |   27989.7 |   27968.0 |    27679 |    28351 |       127.8 | void tensorrt_llm::kernels::topKStage1<float, (int)128, (int)8>(const T1 *, const T1 *const *, T1 *… |
+|      0.1 |          406138 |        64 |    6345.9 |    6304.0 |     6176 |     6784 |       116.4 | __myl_GatCasMulMeaAddSqrDivMulCasMul_0x660344b5c5df1520baf91a6ec2192cb5                              |
+|      0.1 |          258848 |        64 |    4044.5 |    4032.0 |     3808 |     4160 |        56.6 | void tensorrt_llm::kernels::topKStage2Sampling<float, (int)128, (int)8>(const int *, T1 *, int **, … |
+|      0.0 |          135773 |        64 |    2121.5 |    2112.0 |     2048 |     2272 |        57.2 | void tensorrt_llm::runtime::kernels::<unnamed>::copyBatch<unsigned int>(const unsigned char *, unsi… |
+|      0.0 |          131038 |        64 |    2047.5 |    2047.0 |     2015 |     2145 |        41.8 | __myl_AddSqrDivMulCasMulAddGat_0x7885c92bbb407070b22f2770030f7c88                                    |
+|      0.0 |          131010 |        48 |    2729.4 |    2752.0 |     2623 |     3008 |        86.2 | fmha_v2_flash_attention_fp16_64_32_S_q_paged_kv_64_causal_sm89_kernel_nl                             |
+|      0.0 |          129955 |        64 |    2030.5 |    2017.0 |     1824 |     2176 |        37.4 | tensorrt_llm::kernels::copyNextStepIds(int *, const int *const *, const int *, const int *, const i… |
+|      0.0 |          117729 |        48 |    2452.7 |    2432.0 |     2368 |     2912 |        86.2 | void tensorrt_llm::kernels::computeSeqAndPaddingOffsets<__half, (int)256>(tensorrt_llm::kernels::Bu… |
+|      0.0 |          115968 |        64 |    1812.0 |    1824.0 |     1632 |     1888 |        29.4 | tensorrt_llm::kernels::lengthCriterion(tensorrt_llm::kernels::FinishedState *, int *, const int *, … |
+|      0.0 |          115585 |        48 |    2408.0 |    2431.5 |     2272 |     3520 |       191.0 | void tensorrt_llm::kernels::applyBiasRopeUpdateKVCacheV2<__half, __half, (int)256, (int)64, (bool)0… |
+|      0.0 |          105310 |        64 |    1645.5 |    1632.0 |     1631 |     1759 |        23.3 | __myl_AddCasMulMea_0x27ad373ddb444293ca77c0a684a417a9_vec                                            |
+|      0.0 |          101822 |        64 |    1591.0 |    1600.0 |     1567 |     1632 |        16.6 | void genericReformat::copyVectorizedKernel<double, __half, float, (bool)1, (bool)0, (int)1>(unsigne… |
+|      0.0 |           92702 |        64 |    1448.5 |    1440.0 |     1408 |     1696 |        35.7 | void tensorrt_llm::runtime::kernels::<unnamed>::fillBatch<int>(T1 *, const int *, unsigned long, co… |
+|      0.0 |           76189 |        48 |    1587.3 |    1599.5 |     1504 |     1633 |        39.4 | void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, __half, __half, float, __half, (bool)1, (… |
+|      0.0 |           10910 |         9 |    1212.2 |    1056.0 |      959 |     1632 |       263.1 | void tensorrt_llm::runtime::kernels::<unnamed>::fill<int>(T1 *, unsigned long, T1)                   |
+|      0.0 |            5472 |         2 |    2736.0 |    2736.0 |     1408 |     4064 |      1878.1 | tensorrt_llm::kernels::curandInitialize(curandStateXORWOW *, const int *, int, unsigned long)        |
+|      0.0 |            2912 |         2 |    1456.0 |    1456.0 |     1440 |     1472 |        22.6 | void tensorrt_llm::runtime::kernels::<unnamed>::tileTensor<int>(T1 *, const T1 *, unsigned int, uns… |
+|      0.0 |            2560 |         2 |    1280.0 |    1280.0 |     1248 |     1312 |        45.3 | tensorrt_llm::kernels::setupTopKRuntimeArgs(int, int, int *, int, float, float *, int, bool *, cons… |
++----------+-----------------+-----------+-----------+-----------+----------+----------+-------------+------------------------------------------------------------------------------------------------------+

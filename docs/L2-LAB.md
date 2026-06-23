@@ -17,7 +17,7 @@
 | "你现在是 FP16,没开" | 引擎 config 里 **L2 核心旋钮全 ON**:`inflight_fused_batching`、`paged_kv_cache`、`use_paged_context_fmha`、`enable_kv_cache_reuse`、`enable_chunked_context`、`batch_scheduler_policy=max_utilization` |
 | 去别处读源码、凭空搭 toy | 一台**正在跑**的 Triton + TRT-LLM 栈(`triton-llm`),双引擎(0.5B/1.5B),全套 observability(Prometheus/Grafana/Jaeger/DCGM)在线 |
 | 把测量留到 M1 才做 | configs 是 **volume-mount** 的 → 改参数 `docker restart triton-llm` 即生效,**消融成本 ≈ 0** |
-| —— | ~~`client/perf_benchmark.py` 不存在~~ → **已建**(§6 测量脊梁就位),M0–M3 已用真实数字闭环,toy 工件(§7)已交付,**M1 vLLM vs TRT-LLM 同机实测也已完成(见 M1 / notebook 0015)**。 |
+| —— | ~~`client/perf_benchmark.py` 不存在~~ → **已建**(§6 测量脊梁就位),M0–M3 已用真实数字闭环,toy 工件(§7)已交付,**M1 vLLM vs TRT-LLM 同机实测(0015)、M4 量化 + 投机解码(0016)+ kernel 级带宽实锤(0017)均已完成**。 |
 
 ---
 
@@ -117,8 +117,12 @@ docker logs triton-llm 2>&1 | grep -iE 'blocks in KV cache|max tokens in paged|m
 读 block manager + prefix caching,对照 `enable_kv_cache_reuse` 在共享前缀 workload 上的 TTFT 实测。**产物:** toy 分页 KV 块分配器 + 前缀缓存命中逻辑(block table、引用计数、命中率)。**校准:** 命中率预测对上你 KV `reused` 指标。
 > **✅ 产物已交付:** [`lab/paged_kv.py`](../lab/paged_kv.py) + [notebook 0014](./lab-notebook/0014-toy-paged-kv-allocator.md)。把引擎 `reused=2418` 复现到块(命中率 97.5%)。被 M2 模拟器复用做 KV 记账。
 
-### M4 · 量化 + 投机解码(消融:dtype B 级 FP8/INT4-AWQ;draft model)
-TRT-LLM 重编 FP8 / INT4-AWQ,测精度 vs 吞吐(注意:加速主要在 decode);再开投机解码测加速比。**产物:** 量化 + 投机解码实测报告。
+### M4 · 量化 + 投机解码 —— **已收尾**
+TRT-LLM 重编 FP8 / INT4-AWQ,测精度 vs 吞吐(加速主要在 decode);再开投机解码测加速比。**产物:量化 + 投机解码实测报告。**
+> **📄 易懂综述(一页读懂 M4):** [`REPORT-decode-acceleration.md`](./REPORT-decode-acceleration.md) —— 把三种 decode 加速(量化 / 投机解码 / 连续批)统一到「带宽墙」一条主线 + 一张「该用哪个」决策表。
+> **✅ 量化(2026-06-21):** FP8([0009](./lab-notebook/0009-fp8-quantization.md))+ INT4-AWQ([0011](./lab-notebook/0011-int4-awq.md)):decode 提速、引擎更小、KV 容量翻倍;精度需真实 eval 另验(性能台量不了)。
+> **✅ 投机解码(2026-06-23):** draft 0.5B → target 1.5B,harness [`lab/specdec_bench.py`](../lab/specdec_bench.py) + [notebook 0016](./lab-notebook/0016-speculative-decoding.md)。单流贪心**最优 K=2 → mixed 1.18×、可预测文本 1.50×、创作类 0.97×(反而慢)**;采样**必须用 logits 接受**(1.47×,否则崩到 0.68×);**无损**(输出与 K 无关);**一上 batch 就被连续批处理反超(b2 已 0.86×)** → 投机解码是**低并发 / 延迟敏感**利器,不是高吞吐手段。最优 K 比 roofline 预测(K=4)小,因为 draft 成本(实测 r≈0.42)比纯权重比(0.32)高——`(1+aK)/(1+rK)` 模型骨架对、r 必须实测。
+> **✅ kernel 级实锤(2026-06-23):** [notebook 0017](./lab-notebook/0017-nsight-decode-bandwidth.md):本机 CUDA13 驱动比 NGC 24.10 的 `ncu`/`nsys` 新 → PerfWorks 计数器起不来(RCA),改用 **nsys CUDA trace + 逐 kernel 字节记账**,量到 decode 权重 kernel 跑在 **~83% 峰值显存带宽、~0.2% 峰值算力**——「decode 带宽受限」从 roofline 推断升级为**实测**;并发现**未量化的 lm_head GEMV 是量化次线性加速的固定带宽地板**。
 
 ### M5 · 持续(TP/PP 只读 + 开源贡献)
 L4 跑不了 TP/PP → 读原理 + Dynamo 的 disaggregated P/D。给 vLLM 提一个能 merge 的 PR(benchmark/文档/小修)。
@@ -157,7 +161,7 @@ docker logs triton-llm 2>&1 | grep -iE 'blocks in KV cache|maxNumSequences'     
 - **本 repo = 端到端实验台**,但**测引擎要绕开网关层**(§4.1)。
 - **构建现实:** 从源码编 TRT-LLM 很重(M4 量化 / B 级消融进 build 容器);R 级消融在现成 `.venv` + restart 就够。
 
-> 一句话:**方向在 `AI-INFRA-DIRECTION.md`,执行在这里;脊梁是「在自己机器上消融」。M0–M3 用真实数字闭环、测量脊梁(§6)、toy 工件(§7)、M1 vLLM vs TRT-LLM 同机实测(0015)均已交付;剩下是 M4 量化 + 投机解码的深化。**
+> 一句话:**方向在 `AI-INFRA-DIRECTION.md`,执行在这里;脊梁是「在自己机器上消融」。M0–M3 用真实数字闭环、测量脊梁(§6)、toy 工件(§7)、M1 vLLM vs TRT-LLM 同机实测(0015)、M4 量化(0009/0011)+ 投机解码(0016)+ kernel 级实锤(0017)均已交付。L2 消融脊梁基本走完;剩 M5(TP/PP 只读 + 开源 PR)。**
 
 ---
 
@@ -176,3 +180,24 @@ docker logs triton-llm 2>&1 | grep -iE 'blocks in KV cache|maxNumSequences'     
 4. 结果:**C=1 持平 197 tok/s;C=64 TRT-LLM 吞吐 +31%(6256 vs 4339)、TTFT 更低、vLLM p99 TTFT 爆 942ms**;差距随 batch 扩大(编译 kernel vs Python 调度)。
 
 **收尾验证:** `make test` 22/22 绿;系统恢复原状(`triton-llm` up、GPU ~17.8 GB、vLLM 容器已删)。
+
+---
+
+## 10. 交付记录(2026-06-23)— M4 收尾(投机解码 + kernel 级带宽实锤)
+
+把 M4 还差的两块补成真 artifact:**投机解码实测**(0016)和**「decode 带宽受限」的 kernel 级证据**(0017)。
+
+**起点(缺口):** M4 量化已闭环(0009/0011),但「投机解码」只在路线里写着没跑;且 M0/0009/0011 一直用「decode 带宽受限」下结论,却始终是 roofline **手算推断**,无 kernel 级实测。
+
+**投机解码(0016,artifact = [`lab/specdec_bench.py`](../lab/specdec_bench.py) + [`lab/run_0016_sweep.sh`](../lab/run_0016_sweep.sh) + [`lab/specdec_model.py`](../lab/specdec_model.py)):**
+1. 新引擎构建 [`scripts/build_specdec_engines.sh`](../scripts/build_specdec_engines.sh)(`build_engines.sh` 的姊妹):draft 0.5B(`--gather_generation_logits`)+ target 1.5B(`--speculative_decoding_mode draft_tokens_external --max_draft_len 10`),复用 0009 的 Qwen tied-emb 修复。
+2. harness 忠实复刻 TRT-LLM 0.14 `examples/run.py:run_draft_target_model()` 的 draft→verify 循环,干净打点(接受率 / mean accept-per-iter / 吞吐 / 加速),baseline 用**普通 fp16 引擎**(spec target 无 draft 时每 call 只出 1 token)。
+3. 20 组实测(K 扫描 / easy-hard / logits-tokens / batch 交叉),`docker run` 在 NGC 容器里跑 → [`lab/results_0016.jsonl`](../lab/results_0016.jsonl)。
+4. **结论:** 最优 **K=2**(mixed 1.18×、可预测文本 1.50×、创作 0.97× 反慢);采样**必须 logits 接受**(1.47× vs tokens 0.68×);**无损**(K 无关,贪心输出恒 1765 tok);**batch≥2 即被连续批反超**(b2 0.86× → b8 0.52×)→ 投机解码 = 低并发延迟工具。逐迭代耗时线性拟合 `T_iter(K)=16.6+5.59K ms`(残差<1%),back 出 draft 步 5.59ms、r≈0.42(纯权重比 0.32 会高估最优 K)。校准断言并入 `make test`([`tests/test_specdec_model.py`](../tests/test_specdec_model.py),+6 测试 → 共 28)。
+
+**kernel 级实锤(0017,artifact = [`scripts/profile_decode.sh`](../scripts/profile_decode.sh) + [`lab/decode_probe.py`](../lab/decode_probe.py) + `lab/ncu/*.kern.txt`):**
+1. **工具坑(RCA):** 本机驱动 580/CUDA13 比 NGC 24.10 的 `ncu`/`nsys` 2024.2.1 新 → `ncu` `Failed to prepare kernel`、`nsys --gpu-metrics` `NVPA_STATUS_ERROR`(`--privileged`/`--clock-control none` 都不解,是版本不兼容非权限)。
+2. **绕过:** `nsys --trace=cuda`(CUPTI 计时,不走 PerfWorks)能跑 → 拿 kernel 归因 + duration;配合**逐 kernel 精确权重字节**算达到带宽。
+3. **结论:** decode 权重 kernel 实测 **~83% 峰值显存带宽 vs ~0.2% 峰值算力**(lm_head GEMV 82%、transformer GEMM 84%),算术强度 ~1 FLOP/byte(屋脊 400,低 400×)→ 带宽受限**实测坐实**。意外发现:**lm_head 未量化(三 dtype duration 完全相同)= 固定带宽地板**,解释了 0009/0011 量化加速为何次线性(INT4 砍 4× 字节只快 1.6×)。
+
+**收尾验证:** `make test` **28/28 绿**(原 22 + 投机解码模型 6);**`triton-llm` 已 `docker start` 恢复**(ready=200,4 模型全 READY,GPU ~17.8 GB,与实验前一致)。新增引擎(`engines/qwen2.5-0.5b-draft`、`qwen2.5-1.5b-target`)与既有 serving 解耦,不影响网关。

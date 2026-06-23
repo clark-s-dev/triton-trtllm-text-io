@@ -1,0 +1,33 @@
+NOTICE: Existing SQLite export found: lab/ncu/trace_fp8.sqlite
+        It is assumed file was previously exported from: lab/ncu/trace_fp8.nsys-rep
+        Consider using --force-export=true if needed.
+ ** CUDA GPU Kernel Summary (cuda_gpu_kern_sum):
++----------+-----------------+-----------+-----------+-----------+----------+----------+-------------+------------------------------------------------------------------------------------------------------+
+| Time (%) | Total Time (ns) | Instances | Avg (ns)  | Med (ns)  | Min (ns) | Max (ns) | StdDev (ns) |                                                 Name                                                 |
++----------+-----------------+-----------+-----------+-----------+----------+----------+-------------+------------------------------------------------------------------------------------------------------+
+|     29.9 |        70731591 |        64 | 1105181.1 | 1105366.0 |  1101687 |  1107191 |      1064.7 | std::enable_if<!T7, void>::type internal::gemvx::kernel<int, int, __half, __half, __half, float, (b… |
+|     27.0 |        63796690 |      1536 |   41534.3 |   41439.0 |    40927 |    55743 |       687.8 | sm89_xmma_gemm_e4m3f16_e4m3f32_f32_tn_n_tilesize64x128x64_stage4_warpsize2x2x1_tensor16x8x32_bias_f… |
+|     23.3 |        55100948 |      4608 |   11957.7 |    7424.0 |     5792 |    36000 |      7160.9 | sm89_xmma_gemm_e4m3f16_e4m3f32_f32_tn_n_tilesize32x64x64_stage5_warpsize2x2x1_tensor16x8x32_bias_f1… |
+|      4.8 |        11450414 |      1488 |    7695.2 |    7680.0 |     7359 |     8512 |       188.4 | void tensorrt_llm::kernels::mmha::masked_multihead_attention_kernel<unsigned short, __nv_fp8_e4m3, … |
+|      4.6 |        10987845 |      3008 |    3652.9 |    3680.0 |     3423 |     4096 |       140.6 | __myl_AddCasMulMeaAddSqrDivMulCasMulMinMaxCas_0xaefe0aa75d882c070570dade3869d068_vec                 |
+|      3.4 |         7934076 |        64 |  123969.9 |  125823.0 |    66816 |   126495 |     10343.3 | void tensorrt_llm::kernels::batchApplyPenalty<__half>(const T1 *const *, T1 *, const T1 *, int *, c… |
+|      2.9 |         6759755 |        64 |  105621.2 |  105423.0 |   104191 |   107199 |       684.2 | void tensorrt_llm::kernels::addBiasSoftMax<__half>(T1 *, T1 **, T1 *, const T1 *, const int *, cons… |
+|      1.9 |         4393759 |      1536 |    2860.5 |    2816.0 |     2656 |     3297 |       140.8 | __myl_SliNegExpAddDivMulSliMulMulMinMaxCas_0xf4731f5899e81ab3d2ea7f321f6e7165_vec                    |
+|      0.7 |         1614711 |        64 |   25229.9 |   25328.0 |    24800 |    26304 |       254.9 | void tensorrt_llm::kernels::topKStage1<__half, (int)128, (int)8>(const T1 *, const T1 *const *, T1 … |
+|      0.6 |         1515657 |      1536 |     986.8 |     992.0 |      959 |      993 |        11.8 | __myl_Mov_0xbad91c928438cfc4556b1cd054137f22                                                         |
+|      0.2 |          532928 |        64 |    8327.0 |    8320.0 |     7968 |     8704 |       131.9 | __myl_GatCasMulMeaAddSqrDivMulCasMulMinMaxCas_0x08200c45593d53ffc2a3656adea56c83                     |
+|      0.2 |          393434 |        48 |    8196.5 |    8159.0 |     7936 |     9792 |       315.1 | fmha_v2_flash_attention_e4m3_fp32_128_128_S_q_paged_kv_64_causal_sm89_kernel_nl                      |
+|      0.1 |          272222 |        64 |    4253.5 |    4224.0 |     3968 |     4480 |        74.1 | void tensorrt_llm::kernels::topKStage2Sampling<__half, (int)128, (int)8>(const int *, T1 *, int **,… |
+|      0.1 |          141021 |        48 |    2937.9 |    2912.0 |     2720 |     3680 |       129.3 | void tensorrt_llm::kernels::computeSeqAndPaddingOffsets<__half, (int)256>(tensorrt_llm::kernels::Bu… |
+|      0.1 |          136768 |        64 |    2137.0 |    2112.0 |     2080 |     2271 |        40.9 | void tensorrt_llm::runtime::kernels::<unnamed>::copyBatch<unsigned int>(const unsigned char *, unsi… |
+|      0.1 |          130302 |        64 |    2036.0 |    2016.0 |     2015 |     2208 |        36.3 | __myl_AddSqrDivMulCasMulAddGat_0x7885c92bbb407070b22f2770030f7c88                                    |
+|      0.1 |          130173 |        64 |    2034.0 |    2048.0 |     1824 |     2176 |        46.2 | tensorrt_llm::kernels::copyNextStepIds(int *, const int *const *, const int *, const int *, const i… |
+|      0.1 |          125408 |        48 |    2612.7 |    2624.0 |     2495 |     3808 |       196.7 | void tensorrt_llm::kernels::applyBiasRopeUpdateKVCacheV2<__half, __nv_fp8_e4m3, (int)256, (int)64, … |
+|      0.0 |          112834 |        64 |    1763.0 |    1760.0 |     1728 |     1888 |        30.0 | tensorrt_llm::kernels::lengthCriterion(tensorrt_llm::kernels::FinishedState *, int *, const int *, … |
+|      0.0 |          105534 |        64 |    1649.0 |    1632.0 |     1631 |     1760 |        23.5 | __myl_AddCasMulMea_0x27ad373ddb444293ca77c0a684a417a9_vec                                            |
+|      0.0 |           90112 |        64 |    1408.0 |    1408.0 |     1375 |     1600 |        29.1 | void tensorrt_llm::runtime::kernels::<unnamed>::fillBatch<int>(T1 *, const int *, unsigned long, co… |
+|      0.0 |           29311 |         9 |    3256.8 |    1472.0 |      960 |    11264 |      3674.8 | void tensorrt_llm::runtime::kernels::<unnamed>::fill<int>(T1 *, unsigned long, T1)                   |
+|      0.0 |            3360 |         2 |    1680.0 |    1680.0 |     1408 |     1952 |       384.7 | void tensorrt_llm::runtime::kernels::<unnamed>::tileTensor<int>(T1 *, const T1 *, unsigned int, uns… |
+|      0.0 |            3264 |         2 |    1632.0 |    1632.0 |     1408 |     1856 |       316.8 | tensorrt_llm::kernels::curandInitialize(curandStateXORWOW *, const int *, int, unsigned long)        |
+|      0.0 |            2751 |         2 |    1375.5 |    1375.5 |     1311 |     1440 |        91.2 | tensorrt_llm::kernels::setupTopKRuntimeArgs(int, int, int *, int, float, float *, int, bool *, cons… |
++----------+-----------------+-----------+-----------+-----------+----------+----------+-------------+------------------------------------------------------------------------------------------------------+
