@@ -84,6 +84,10 @@ INT4  ■■■■■■■■■■■■ 49%        算力 ·0.27%
 lm_head gemvx (单 kernel)  ■■■■■■■■■■■■■■■■■■■■■ 82%   ← 贴着带宽墙
 ```
 
+![Nsight decode-kernel 分析:带宽受限 + lm_head 地板](../decode-roofline.png)
+
+*左:权重 kernel 跑在 49–67% 峰值带宽、仅 ~0.2% 峰值算力(带宽受限)。右:量化把 transformer GEMM 砍小,未量化的 FP16 `lm_head` 时间占比从 24% 涨到 40%(量化次线性加速之源)。数据 = `nsys` kernel 计时 + 字节记账(`ncu` 硬件计数器在本机被驱动版本挡住,见 ⑤)。*
+
 ## ⑤ Gap 分析(预测 vs 实测)
 
 - **预测「DRAM% > 60%、Compute% < 30%」——对,且更极端。** 权重 kernel 82–84% 峰值带宽,算力 ~0.2%。decode 带宽受限**实测坐实**。
